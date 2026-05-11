@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USV 반응표면 — AH36 / Al 5083</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07090f;--panel:#0d1420;--border:#192438;
+  --accent:#00d4ff;--danger:#ff3355;--safe:#00e09a;--warn:#ffb700;
+  --text:#ddeeff;--muted:#4a6480;
+  --font:'Noto Sans KR',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 15%,rgba(0,212,255,.04),transparent),
+    linear-gradient(rgba(0,212,255,.02) 1px,transparent 1px) 0 0/48px 48px,
+    linear-gradient(90deg,rgba(0,212,255,.02) 1px,transparent 1px) 0 0/48px 48px;
+}
+.app{position:relative;z-index:1;max-width:1560px;margin:0 auto;padding:16px 12px}
+header{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.tag-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tag{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;padding:2px 7px;border-radius:2px;border:1px solid}
+.tag-b{color:var(--accent);border-color:var(--accent)}
+.tag-g{color:var(--safe);border-color:var(--safe)}
+.tag-r{color:var(--danger);border-color:var(--danger)}
+h1{font-size:clamp(14px,2.2vw,20px);font-weight:700}
+.sub{font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+
+.main{display:grid;grid-template-columns:268px 1fr 74px;gap:12px;align-items:start;
+      grid-template-areas:"sidebar plot zslider"}
+.main > .sidebar{grid-area:sidebar}
+.main > .plot-wrap{grid-area:plot}
+.main > .z-panel{grid-area:zslider}
+@media(max-width:900px){
+  .main{grid-template-columns:1fr 56px;
+        grid-template-areas:"plot zslider" "sidebar sidebar"}
+  #plot{height:520px}
+  .z-panel{padding:10px 4px;min-height:520px}
+  .z-inner{height:380px;width:24px}
+  #zslider{width:360px}
+  .z-big{font-size:13px}
+  .z-lbl{font-size:8px;letter-spacing:1.5px}
+}
+@media(max-width:480px){
+  .app{padding:10px 8px}
+  h1{font-size:14px}
+  .sub{font-size:10px}
+  #plot{height:460px}
+  .z-panel{min-height:460px;padding:8px 3px}
+  .z-inner{height:340px;width:22px}
+  #zslider{width:320px;height:3px}
+  #zslider::-webkit-slider-thumb{width:16px;height:16px}
+}
+
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px}
+.pt{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-family:var(--mono);
+    margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.pt::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.ctrl{margin-bottom:14px}
+.cl{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:6px;font-family:var(--mono)}
+.cv{color:var(--accent);font-weight:700}
+input[type=range]{width:100%;height:3px;-webkit-appearance:none;background:var(--border);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(0,212,255,.7);cursor:pointer}
+
+.ic{background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.12);border-radius:7px;padding:11px;margin-bottom:10px}
+.ir{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px}
+.ir:last-child{margin-bottom:0}
+.ik{color:var(--muted);font-family:var(--mono);font-size:10px}
+.iv{font-weight:700;font-family:var(--mono)}
+.cd{color:var(--danger)}.cs{color:var(--safe)}.cw{color:var(--warn)}.ca{color:var(--accent)}
+
+.tr2{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.tb{flex:1;min-width:52px;padding:5px 6px;font-size:10px;font-family:var(--mono);
+    border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:4px;cursor:pointer;transition:all .2s;text-align:center}
+.tb.on{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.08)}
+
+.plot-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+#plot{width:100%;height:610px}
+
+/* Z-slider panel */
+.z-panel{
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:12px 8px;display:flex;flex-direction:column;align-items:center;
+  gap:8px;min-height:610px;
+}
+.z-lbl{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--warn);text-align:center}
+.z-big{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--warn);text-align:center;line-height:1.2}
+.z-unit{font-size:9px;color:var(--muted);font-family:var(--mono)}
+.z-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;overflow:hidden}
+.z-inner{position:relative;height:450px;width:28px;display:flex;align-items:center;justify-content:center}
+#zslider{
+  position:absolute;width:430px;height:4px;
+  transform:rotate(-90deg);transform-origin:center;
+  -webkit-appearance:none;appearance:none;
+  background:linear-gradient(to right,var(--border),var(--warn));
+  border-radius:2px;outline:none;cursor:pointer;
+}
+#zslider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--warn);box-shadow:0 0 12px rgba(255,183,0,.8);cursor:pointer;
+}
+.z-minmax{font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center}
+
+.tbl-w{overflow-y:auto;max-height:200px}
+table{width:100%;border-collapse:collapse;font-size:10px;font-family:var(--mono)}
+th{text-align:right;padding:4px 6px;color:var(--muted);border-bottom:1px solid var(--border);
+   position:sticky;top:0;background:var(--panel);font-weight:400}
+th:first-child{text-align:left}
+td{padding:4px 6px;border-bottom:1px solid rgba(25,36,56,.4);text-align:right}
+td:first-child{text-align:left;color:var(--muted)}
+.fo{color:var(--danger);font-weight:700}.fx{color:var(--safe)}
+
+.fml{background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:6px;
+     padding:10px;font-family:var(--mono);font-size:10px;line-height:1.9;color:var(--muted);margin-top:8px}
+.fml .hl{color:var(--accent)}.fml .wl{color:var(--warn)}
+.r2b{display:inline-block;margin-top:4px;padding:2px 7px;border-radius:3px;
+     background:rgba(0,224,154,.1);border:1px solid rgba(0,224,154,.3);color:var(--safe);font-size:9px}
+/* ─ Material tab bar ─ */
+.tab-bar{display:flex;gap:8px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.mat-btn{flex:1;max-width:220px;padding:9px 14px;font-size:12px;font-family:var(--mono);font-weight:700;
+         border-radius:6px;border:1px solid var(--border);background:transparent;
+         color:var(--muted);cursor:pointer;transition:all .2s;letter-spacing:1px}
+.mat-btn.on-ah{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.1)}
+.mat-btn.on-al{border-color:var(--warn);color:var(--warn);background:rgba(255,183,0,.1)}
+.mat-btn:hover:not(.on-ah):not(.on-al){border-color:var(--muted);color:var(--text)}
+
+/* Video panel (in sidebar) */
+.video-panel{padding:12px}
+.video-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px}
+.video-pt{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-family:var(--mono)}
+.video-meta-row{display:flex;justify-content:space-between;align-items:center;
+                font-family:var(--mono);font-size:10px;margin-bottom:8px;gap:8px;flex-wrap:wrap}
+.video-case{color:var(--text);font-weight:700;white-space:nowrap}
+.video-from{color:var(--muted);white-space:nowrap}
+.video-status-pill{padding:2px 8px;border-radius:3px;font-size:9px;font-weight:700;
+                    font-family:var(--mono);letter-spacing:1px;white-space:nowrap}
+.video-status-pill.frac{background:rgba(255,51,85,.15);color:var(--danger);border:1px solid rgba(255,51,85,.4)}
+.video-status-pill.safe{background:rgba(0,224,154,.12);color:var(--safe);border:1px solid rgba(0,224,154,.4)}
+.video-wrap{position:relative;width:100%;background:#000;border-radius:6px;overflow:hidden;
+            border:1px solid var(--border);aspect-ratio:16/9}
+#fem-video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+.video-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+               background:rgba(0,0,0,0.7);color:var(--muted);font-family:var(--mono);font-size:10px;
+               text-align:center;padding:14px;pointer-events:none;opacity:0;transition:opacity 0.3s;
+               line-height:1.5}
+.video-overlay.show{opacity:1}
+.video-overlay.error{color:var(--warn)}
+.video-hint{display:flex;justify-content:space-between;font-size:9px;color:var(--muted);
+            font-family:var(--mono);margin-top:8px;gap:8px;flex-wrap:wrap}
+.video-distance{color:var(--accent);font-family:var(--mono);font-size:9px;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="tab-bar">
+  <button class="mat-btn on-ah" id="btn-ah" onclick="switchMat('AH')">⬡ AH36 강재</button>
+  <button class="mat-btn" id="btn-al" onclick="switchMat('AL')">◈ Al 5083-H116</button>
+</div>
+<header>
+  <h1>USV 자폭 공격 — 외판 손상 반응표면 (<span id="mat-title">AH36 강재</span>)</h1>
+  <div class="sub">log-RSM 반응표면 (비파단 R²=0.997) · 파단구간 회색처리 · 축 원점 통일 · 최대변형량 단면 슬라이서</div>
+</header>
+
+<div class="main">
+
+<!-- ─ Sidebar ─ -->
+<div class="sidebar">
+  <div class="panel" style="margin-bottom:12px">
+    <div class="pt">실시간 계산기</div>
+    <div class="ctrl">
+      <div class="cl"><span>폭발거리 (d)</span><span class="cv" id="vd">3.0 m</span></div>
+      <input type="range" id="sd" min="0.5" max="7.0" step="0.05" value="3.0">
+    </div>
+    <div class="ctrl">
+      <div class="cl"><span>외판두께 (t)</span><span class="cv" id="vt">12 mm</span></div>
+      <input type="range" id="st" min="6" max="24" step="0.5" value="12">
+    </div>
+    <div class="ic">
+      <div class="ir"><span class="ik">예측 변형량</span><span class="iv ca" id="iy">—</span></div>
+      <div class="ir"><span class="ik">파단 판정</span><span class="iv" id="ifrac">—</span></div>
+      <div class="ir"><span class="ik">안전거리 여유</span><span class="iv" id="imarg">—</span></div>
+      <div class="ir"><span class="ik">임계 거리</span><span class="iv ca" id="idc">—</span></div>
+    </div>
+  </div>
+
+  <!-- Video panel (moved into sidebar, below calculator) -->
+  <div class="panel video-panel" style="margin-bottom:12px">
+    <div class="video-head">
+      <div class="video-pt">FEM 해석 동영상</div>
+      <span class="video-status-pill safe" id="vid-status">안전</span>
+    </div>
+    <div class="video-meta-row">
+      <span class="video-from" id="vid-from">d=3.0m, t=12mm</span>
+      <span class="video-case" id="vid-case">→ 3.0/12</span>
+    </div>
+    <div class="video-wrap">
+      <video id="fem-video" autoplay loop muted playsinline></video>
+      <div class="video-overlay" id="vid-overlay">동영상 로딩 중…</div>
+    </div>
+    <div class="video-hint">
+      <span>슬라이더 정지 시 가장 가까운 해석점 자동재생</span>
+      <span class="video-distance" id="vid-dist">—</span>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:12px">
+    <div class="pt">레이어 · 옵션</div>
+    <div style="font-size:10px;color:var(--muted);margin-bottom:5px;font-family:var(--mono)">레이어</div>
+    <div class="tr2">
+      <button class="tb on" id="bl-safe" onclick="togL('safe')">안전면</button>
+      <button class="tb on" id="bl-frac" onclick="togL('frac')">파단면</button>
+      <button class="tb on" id="bl-bnd"  onclick="togL('bnd')">경계선</button>
+      <button class="tb on" id="bl-data" onclick="togL('data')">데이터</button>
+      <button class="tb on" id="bl-zpl"  onclick="togL('zpl')">변형량면</button>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-bottom:5px;font-family:var(--mono)">컬러맵</div>
+    <div class="tr2">
+      <button class="tb on" id="cm0" onclick="setCM(0)">RdYlGn</button>
+      <button class="tb"    id="cm1" onclick="setCM(1)">Viridis</button>
+      <button class="tb"    id="cm2" onclick="setCM(2)">Plasma</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="pt">FEM 데이터 (35케이스)</div>
+    <div class="tbl-w">
+      <table>
+        <thead><tr><th>d(m)</th><th>t(mm)</th><th>Y(mm)</th><th>파단</th><th>삭제요소</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ─ Plot ─ -->
+<div class="plot-wrap">
+  <div id="plot"></div>
+</div>
+
+<!-- ─ Z Slider ─ -->
+<div class="z-panel">
+  <div class="z-lbl">최대 변형량</div>
+  <div class="z-big" id="zvd">600<br><span class="z-unit">mm</span></div>
+  <div style="font-size:9px;color:var(--muted);font-family:var(--mono);text-align:center">▲ 위</div>
+  <div class="z-wrap">
+    <div class="z-inner">
+      <input type="range" id="zslider" min="200" max="1400" step="10" value="600">
+    </div>
+  </div>
+  <div style="font-size:9px;color:var(--muted);font-family:var(--mono);text-align:center">▼ 아래</div>
+  <div class="z-minmax" style="color:var(--warn)">1400</div>
+  <div style="width:36px;height:5px;border-radius:3px;background:var(--warn);opacity:.5"></div>
+  <div class="z-minmax" style="color:var(--warn)">200 mm</div>
+  <div style="font-size:8px;color:var(--muted);font-family:var(--mono);text-align:center;margin-top:4px;line-height:1.6">
+    드래그하여<br>Z축 단면<br>이동
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  DATA
+// ══════════════════════════════════════════
+//  AH36 DATA
+// ══════════════════════════════════════════
+let RAW = [
+  {d:1.5,t:8, y:12834.32,f:1,del:260},{d:1.5,t:10,y:9832.99, f:1,del:201},
+  {d:1.5,t:12,y:7025.57, f:1,del:139},{d:1.5,t:14,y:5306.94, f:1,del:106},
+  {d:1.5,t:16,y:4142.12, f:1,del:76},
+  {d:2.0,t:8, y:6204.06, f:1,del:196},{d:2.0,t:10,y:4671.40, f:1,del:127},
+  {d:2.0,t:12,y:3149.75, f:1,del:70}, {d:2.0,t:14,y:690.07,  f:1,del:22},
+  {d:2.0,t:16,y:556.17,  f:1,del:6},
+  {d:2.5,t:8, y:4009.49, f:1,del:134},{d:2.5,t:10,y:858.07,  f:1,del:33},
+  {d:2.5,t:12,y:602.89,  f:1,del:11}, {d:2.5,t:14,y:492.84,  f:0,del:0},
+  {d:2.5,t:16,y:423.56,  f:0,del:0},
+  {d:3.0,t:8, y:1007.35, f:1,del:36}, {d:3.0,t:10,y:762.62,  f:0,del:0},
+  {d:3.0,t:12,y:580.15,  f:0,del:0},  {d:3.0,t:14,y:452.81,  f:0,del:0},
+  {d:3.0,t:16,y:358.94,  f:0,del:0},
+  {d:3.5,t:8, y:1006.43, f:0,del:0},  {d:3.5,t:10,y:752.08,  f:0,del:0},
+  {d:3.5,t:12,y:575.28,  f:0,del:0},  {d:3.5,t:14,y:451.34,  f:0,del:0},
+  {d:3.5,t:16,y:357.80,  f:0,del:0},
+  {d:4.0,t:8, y:976.51,  f:0,del:0},  {d:4.0,t:10,y:728.76,  f:0,del:0},
+  {d:4.0,t:12,y:556.73,  f:0,del:0},  {d:4.0,t:14,y:437.42,  f:0,del:0},
+  {d:4.0,t:16,y:346.65,  f:0,del:0},
+  {d:5.0,t:8, y:874.59,  f:0,del:0},  {d:5.0,t:10,y:651.25,  f:0,del:0},
+  {d:5.0,t:12,y:496.73,  f:0,del:0},  {d:5.0,t:14,y:388.48,  f:0,del:0},
+  {d:5.0,t:16,y:310.50,  f:0,del:0},
+];
+
+// ══════════════════════════════════════════
+//  RSM (log-polynomial, 비파단 학습, R²=0.997)
+// ══════════════════════════════════════════
+let B = [8.481556,-0.021742,-0.197364,-0.003881,0.003370,-0.003045];
+function rsm(d,t){ return Math.exp(B[0]+B[1]*d+B[2]*t+B[3]*d*d+B[4]*t*t+B[5]*d*t); }
+
+// ── 쌍선형 보간 (계산기용) ──────────────
+let DG=[1.5,2.0,2.5,3.0,3.5,4.0,5.0],TG=[8,10,12,14,16];
+let YG=[
+  [12834.32,6204.06,4009.49,1007.35,1006.43,976.51,874.59],
+  [9832.99, 4671.40, 858.07, 762.62, 752.08,728.76,651.25],
+  [7025.57, 3149.75, 602.89, 580.15, 575.28,556.73,496.73],
+  [5306.94,  690.07, 492.84, 452.81, 451.34,437.42,388.48],
+  [4142.12,  556.17, 423.56, 358.94, 357.80,346.65,310.50],
+];
+function bilinear(d,t){
+  const dc=Math.max(DG[0],Math.min(DG[DG.length-1],d));
+  const tc=Math.max(TG[0],Math.min(TG[TG.length-1],t));
+  let di=0; for(let i=0;i<DG.length-1;i++){if(DG[i]<=dc&&dc<=DG[i+1]){di=i;break;}}
+  if(dc===DG[DG.length-1])di=DG.length-2;
+  let ti=0; for(let i=0;i<TG.length-1;i++){if(TG[i]<=tc&&tc<=TG[i+1]){ti=i;break;}}
+  if(tc===TG[TG.length-1])ti=TG.length-2;
+  const d0=DG[di],d1=DG[di+1],t0=TG[ti],t1=TG[ti+1];
+  const td=(dc-d0)/(d1-d0),tt=(tc-t0)/(t1-t0);
+  return YG[ti][di]*(1-td)*(1-tt)+YG[ti][di+1]*td*(1-tt)
+        +YG[ti+1][di]*(1-td)*tt  +YG[ti+1][di+1]*td*tt;
+}
+
+// ══════════════════════════════════════════
+//  FRACTURE BOUNDARY
+// ══════════════════════════════════════════
+let BC = [{t:8,dc:3.25},{t:10,dc:2.75},{t:12,dc:2.75},{t:14,dc:2.25},{t:16,dc:2.25}];
+function dCrit(t) {
+  if(!BC||!BC.length) return 999;
+  const tMin=BC[0].t, tMax=BC[BC.length-1].t;
+  if(t<=tMin){
+    // 외삽 (아래 방향)
+    if(BC.length>=2){ const s=(BC[1].dc-BC[0].dc)/(BC[1].t-BC[0].t); return BC[0].dc+s*(t-BC[0].t); }
+    return BC[0].dc;
+  }
+  if(t>=tMax){
+    // 외삽 (위 방향)
+    if(BC.length>=2){ const n=BC.length-1,s=(BC[n].dc-BC[n-1].dc)/(BC[n].t-BC[n-1].t); return BC[n].dc+s*(t-BC[n].t); }
+    return BC[BC.length-1].dc;
+  }
+  for(let i=0;i<BC.length-1;i++){
+    if(BC[i].t<=t&&t<=BC[i+1].t)
+      return BC[i].dc+(BC[i+1].dc-BC[i].dc)*(t-BC[i].t)/(BC[i+1].t-BC[i].t);
+  }
+  return BC[0].dc;
+}
+function isFrac(d,t){ return d < dCrit(t); }
+
+// ══════════════════════════════════════════
+//  INTERSECTION (RSM 해석해 — 2차방정식)
+// ══════════════════════════════════════════
+function findD(t, zv) {
+  if(zv<=0) return null;
+  const lz=Math.log(zv);
+  const a=B[3], bc=B[1]+B[5]*t, cc=B[0]+B[2]*t+B[4]*t*t-lz;
+  const disc=bc*bc-4*a*cc;
+  if(disc<0) return null;
+  const sq=Math.sqrt(disc);
+  const d1=(-bc-sq)/(2*a), d2=(-bc+sq)/(2*a);
+  const dc=dCrit(t);
+  const cands=[d1,d2].filter(d=>d>=0.5&&d<=7.0&&d>=dc-0.05);
+  if(!cands.length) return null;
+  return cands.reduce((a,b)=>Math.abs(a-dc)<Math.abs(b-dc)?a:b);
+}
+
+function computeIntersection(zv) {
+  const ix=[],iy=[],iz=[];
+  for(let j=0;j<=200;j++){
+    const t=6+18*j/200;
+    const d=findD(t,zv);
+    if(d!==null){ ix.push(d);iy.push(t);iz.push(zv); }
+  }
+  return {x:ix,y:iy,z:iz};
+}
+
+// ══════════════════════════════════════════
+//  AL 5083-H116 DATA
+// ══════════════════════════════════════════
+const AL_RAW = [
+  {d:2.5,t:8, y:22108.64,f:1},{d:2.5,t:10,y:15243.41,f:1},{d:2.5,t:12,y:12186.48,f:1},
+  {d:2.5,t:14,y:10629.14,f:1},{d:2.5,t:16,y: 7754.90,f:1},{d:2.5,t:18,y: 5724.39,f:1},
+  {d:3.5,t:8, y:11258.11,f:1},{d:3.5,t:10,y: 7463.68,f:1},{d:3.5,t:12,y: 5221.51,f:1},
+  {d:3.5,t:14,y: 4626.54,f:1},{d:3.5,t:16,y: 3125.95,f:1},{d:3.5,t:18,y: 1267.30,f:1},
+  {d:4.5,t:8, y: 5592.34,f:1},{d:4.5,t:10,y: 3856.91,f:1},{d:4.5,t:12,y: 1700.47,f:1},
+  {d:4.5,t:14,y: 1373.07,f:1},{d:4.5,t:16,y: 1116.55,f:1},{d:4.5,t:18,y:  951.33,f:1},
+  {d:5.5,t:8, y: 3562.47,f:1},{d:5.5,t:10,y: 1863.48,f:1},{d:5.5,t:12,y: 1467.73,f:1},
+  {d:5.5,t:14,y: 1171.44,f:1},{d:5.5,t:16,y:  959.72,f:1},{d:5.5,t:18,y:  797.87,f:0},
+  {d:6.5,t:8, y: 2053.71,f:1},{d:6.5,t:10,y: 1561.93,f:1},{d:6.5,t:12,y: 1210.39,f:1},
+  {d:6.5,t:14,y:  987.89,f:0},{d:6.5,t:16,y:  818.08,f:0},{d:6.5,t:18,y:  679.49,f:0},
+  {d:7.5,t:8, y: 1715.59,f:1},{d:7.5,t:10,y: 1288.85,f:1},{d:7.5,t:12,y: 1028.68,f:0},
+  {d:7.5,t:14,y:  841.51,f:0},{d:7.5,t:16,y:  693.42,f:0},{d:7.5,t:18,y:  576.83,f:0},
+];
+const AL_DG=[2.5,3.5,4.5,5.5,6.5,7.5], AL_TG=[8,10,12,14,16,18];
+const AL_YG=[
+  [22108.64,11258.11,5592.34,3562.47,2053.71,1715.59],
+  [15243.41, 7463.68,3856.91,1863.48,1561.93,1288.85],
+  [12186.48, 5221.51,1700.47,1467.73,1210.39,1028.68],
+  [10629.14, 4626.54,1373.07,1171.44, 987.89, 841.51],
+  [ 7754.90, 3125.95,1116.55, 959.72, 818.08, 693.42],
+  [ 5724.39, 1267.30, 951.33, 797.87, 679.49, 576.83],
+];
+const AL_B=[9.275127,-0.110633,-0.117524,-0.002611,0.000951,-0.000992];
+const AL_BC=[{t:12,dc:7.0},{t:14,dc:6.0},{t:16,dc:6.0},{t:18,dc:5.0}];
+
+// ── AH 원본 저장 ──
+const AH_RAW=[...RAW], AH_B=[...B], AH_DG=[...DG], AH_TG=[...TG],
+      AH_YG=YG.map(r=>[...r]), AH_BC=BC.map(o=>({...o}));
+
+// ══════════════════════════════════════════
+//  MATERIAL CONFIGS
+// ══════════════════════════════════════════
+const MAT_CFG = {
+  AH:{ dMin:0.5,dMax:7.0,tMin:6,tMax:24, Y_SMIN:300,Y_SMAX:1100,
+       xRange:[0.5,7],yRange:[6,24],dtickD:1,dtickT:2,
+       slDMin:0.5,slDMax:7,slTMin:6,slTMax:24,dDef:3.0,tDef:12,
+       videoPrefix:'AH', title:'AH36 강재', accentColor:'var(--accent)',
+       RAW:AH_RAW, B:AH_B, DG:AH_DG, TG:AH_TG, YG:AH_YG, BC:AH_BC },
+  AL:{ dMin:0.5,dMax:8.0,tMin:6,tMax:20, Y_SMIN:550,Y_SMAX:1100,
+       xRange:[0.5,8],yRange:[6,20],dtickD:1,dtickT:2,
+       slDMin:0.5,slDMax:8,slTMin:6,slTMax:20,dDef:6.0,tDef:14,
+       videoPrefix:'AL', title:'Al 5083-H116', accentColor:'var(--warn)',
+       RAW:AL_RAW, B:AL_B, DG:AL_DG, TG:AL_TG, YG:AL_YG, BC:AL_BC },
+};
+let CURMAT='AH', MC=MAT_CFG.AH;
+
+// ══════════════════════════════════════════
+//  GRID GENERATION (재료 전환 시 재생성)
+// ══════════════════════════════════════════
+const ND=100,NT=80;
+const DMAX=1400;
+let dArr=[],tArr=[],zSafe=[],zFrac=[],bndT=[],bndD=[],bndZ=[];
+let Y_SMIN=300,Y_SMAX=1100;
+
+function buildSurfaceData(){
+  dArr=[];tArr=[];zSafe=[];zFrac=[];bndT=[];bndD=[];bndZ=[];
+  Y_SMIN=MC.Y_SMIN; Y_SMAX=MC.Y_SMAX;
+  for(let i=0;i<=ND;i++) dArr.push(MC.dMin+(MC.dMax-MC.dMin)*i/ND);
+  for(let j=0;j<=NT;j++) tArr.push(MC.tMin+(MC.tMax-MC.tMin)*j/NT);
+  for(let j=0;j<=NT;j++){
+    const rs=[],rf=[];
+    for(let i=0;i<=ND;i++){
+      const d=dArr[i],t=tArr[j],y=Math.min(rsm(d,t),DMAX),fr=isFrac(d,t);
+      rs.push(fr?null:y); rf.push(fr?y:null);
+    }
+    zSafe.push(rs);zFrac.push(rf);
+  }
+  for(let j=0;j<=NT*4;j++){
+    const t=MC.tMin+(MC.tMax-MC.tMin)*j/(NT*4);
+    const dc=dCrit(t);
+    if(dc>=MC.dMin&&dc<=MC.dMax){ bndT.push(t);bndD.push(dc);bndZ.push(Math.min(rsm(dc,t),DMAX)); }
+  }
+}
+buildSurfaceData();
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+const LAYERS={safe:true,frac:true,bnd:true,data:true,zpl:true};
+const CMS=['RdYlGn','Viridis','Plasma_r'];
+let cmIdx=0, zVal=600;
+
+// Trace indices
+const TI={safe:0,frac:1,bnd:2,fdat:3,sdat:4,ori:5,zpl:6,isec:7};
+
+// ══════════════════════════════════════════
+//  BUILD TRACES
+// ══════════════════════════════════════════
+function buildTraces(){
+  const cm=CMS[cmIdx];
+  const isec=computeIntersection(zVal);
+
+  const safeCS=[
+    [0,'#0022ee'],[0.25,'#00ccaa'],[0.5,'#aaee00'],[0.75,'#ffcc00'],[1,'#ff3300']
+  ];
+
+  return [
+    // 0: Safe surface
+    {
+      type:'surface',name:'안전 구간',
+      x:dArr,y:tArr,z:zSafe,
+      colorscale: cmIdx===0?safeCS:cm,
+      cmin:Y_SMIN, cmax:Y_SMAX,
+      opacity:0.92,showscale:true,
+      colorbar:{
+        title:{text:'변형량 (mm)',font:{color:'white',size:12}},
+        tickfont:{color:'white',size:10},
+        thickness:10,len:0.45,x:1.08,
+        tickvals:[300,500,700,900,1100],
+      },
+      visible:LAYERS.safe,
+      hovertemplate:'d:%{x:.2f}m  t:%{y:.1f}mm<br>변형량:%{z:.0f}mm<extra>안전구간</extra>',
+    },
+    // 1: Fracture surface (gray, bilinear)
+    {
+      type:'surface',name:'파단 구간',
+      x:dArr,y:tArr,z:zFrac,
+      colorscale:[[0,'rgba(100,108,125,0.38)'],[1,'rgba(145,155,170,0.48)']],
+      showscale:false,opacity:1,
+      visible:LAYERS.frac,
+      hovertemplate:'d:%{x:.2f}m  t:%{y:.1f}mm<br><b>파단 구간</b><extra>파단구간</extra>',
+    },
+    // 2: Fracture boundary line (on surface, orange)
+    {
+      type:'scatter3d',name:'파단 경계',
+      x:bndD,y:bndT,z:bndZ,
+      mode:'lines',
+      line:{color:'#ffb700',width:7},
+      visible:LAYERS.bnd,
+      hovertemplate:'t:%{y:.1f}mm → 안전거리:%{x:.2f}m<br>Y:%{z:.0f}mm<extra>파단경계</extra>',
+    },
+    // 3: Fracture data points
+    {
+      type:'scatter3d',name:'파단',
+      x:RAW.filter(r=>r.f).map(r=>r.d),
+      y:RAW.filter(r=>r.f).map(r=>r.t),
+      z:RAW.filter(r=>r.f).map(r=>Math.min(r.y,DMAX)),
+      mode:'markers',
+      marker:{size:4,color:'#ff3355',opacity:0.95,line:{color:'#fff',width:0.5},
+              symbol:'circle'},
+      visible:LAYERS.data,
+      hovertemplate:'d:%{x}m  t:%{y}mm<br>실측:%{z:.0f}mm<br><b>파단 O</b><extra></extra>',
+    },
+    // 4: Safe data points
+    {
+      type:'scatter3d',name:'안전',
+      x:RAW.filter(r=>!r.f).map(r=>r.d),
+      y:RAW.filter(r=>!r.f).map(r=>r.t),
+      z:RAW.filter(r=>!r.f).map(r=>r.y),
+      mode:'markers',
+      marker:{size:4,color:'#00e09a',opacity:0.95,line:{color:'#fff',width:0.5},
+              symbol:'circle'},
+      visible:LAYERS.data,
+      hovertemplate:'d:%{x}m  t:%{y}mm<br>변형량:%{z:.0f}mm<br><b>안전</b><extra></extra>',
+    },
+    // 5: Origin marker
+    {
+      type:'scatter3d',name:'원점',
+      x:[0],y:[0],z:[0],
+      mode:'markers+text',
+      marker:{size:5,color:'white',symbol:'cross'},
+      text:['O'],textfont:{color:'white',size:11},textposition:'top center',
+      hovertemplate:'원점 (0,0,0)<extra></extra>',
+    },
+    // 6: Z-plane
+    {
+      type:'surface',name:'Z 단면',
+      x:[MC.xRange[0],MC.xRange[1]],y:[MC.yRange[0],MC.yRange[1]],
+      z:[[zVal,zVal],[zVal,zVal]],
+      colorscale:[[0,'rgba(0,212,255,0.10)'],[1,'rgba(0,212,255,0.10)']],
+      showscale:false,opacity:1,
+      visible:LAYERS.zpl,
+      hoverinfo:'skip',
+    },
+    // 7: Intersection line
+    {
+      type:'scatter3d',name:'교선',
+      x:isec.x,y:isec.y,z:isec.z,
+      mode:'lines',
+      line:{color:'#00d4ff',width:9},
+      visible:LAYERS.zpl&&isec.x.length>0,
+      hovertemplate:'d:%{x:.2f}m  t:%{y:.1f}mm<br>Z=%{z:.0f}mm<extra>Z단면 교선</extra>',
+    },
+  ];
+}
+
+// ══════════════════════════════════════════
+//  LAYOUT — 원점부터 시작, 흰 라벨 14pt
+// ══════════════════════════════════════════
+const AXIS_STYLE = {
+  titlefont:{color:'white',size:14},
+  tickfont:{color:'white',size:11},
+  gridcolor:'#1e2d45',
+  zerolinecolor:'rgba(255,255,255,0.4)',
+  showbackground:true,
+  backgroundcolor:'rgba(0,0,0,0.15)',
+  linecolor:'rgba(255,255,255,0.3)',
+  linewidth:2,
+};
+
+const layout={
+  paper_bgcolor:'#0d1420',
+  margin:{l:0,r:100,t:10,b:0},
+  scene:{
+    bgcolor:'#07090f',
+    xaxis:{...AXIS_STYLE,
+      title:{text:'폭발거리 (m)',font:{color:'white',size:14}},
+      range:[0.5,7], dtick:1,
+    },
+    yaxis:{...AXIS_STYLE,
+      title:{text:'외판두께 (mm)',font:{color:'white',size:14}},
+      range:[6,24], dtick:2,
+    },
+    zaxis:{...AXIS_STYLE,
+      title:{text:'최대변형량 (mm)',font:{color:'white',size:14}},
+      range:[0,DMAX+100], dtick:200,
+    },
+    camera:{eye:{x:1.9,y:-2.1,z:0.95}},
+    aspectmode:'manual',
+    aspectratio:{x:1.8,y:1,z:0.8},
+  },
+  showlegend:false,
+};
+const config={responsive:true,displayModeBar:true,displaylogo:false};
+
+Plotly.newPlot('plot',buildTraces(),layout,config);
+
+// ══════════════════════════════════════════
+//  MATERIAL SWITCH
+// ══════════════════════════════════════════
+function switchMat(key){
+  CURMAT=key; MC=MAT_CFG[key];
+  RAW=MC.RAW;
+  B.length=0; MC.B.forEach((v,i)=>{B[i]=v;});
+  DG.length=0; MC.DG.forEach(v=>DG.push(v));
+  TG.length=0; MC.TG.forEach(v=>TG.push(v));
+  YG.length=0; MC.YG.forEach(r=>YG.push([...r]));
+  BC.length=0; MC.BC.forEach(o=>BC.push({...o}));
+  buildSurfaceData();
+  layout.scene.xaxis.range=MC.xRange;
+  layout.scene.yaxis.range=MC.yRange;
+  const sd=document.getElementById('sd'),st=document.getElementById('st');
+  sd.min=MC.slDMin; sd.max=MC.slDMax; sd.value=MC.dDef;
+  st.min=MC.slTMin; st.max=MC.slTMax; st.value=MC.tDef;
+  const zv=key==='AH'?600:800;
+  document.getElementById('zslider').value=zv; zVal=zv;
+  document.getElementById('zvd').innerHTML=zv+'<br><span class="z-unit">mm</span>';
+  document.getElementById('btn-ah').className='mat-btn'+(key==='AH'?' on-ah':'');
+  document.getElementById('btn-al').className='mat-btn'+(key==='AL'?' on-al':'');
+  document.getElementById('mat-title').textContent=MC.title;
+  Plotly.react('plot',buildTraces(),layout,config);
+  calc(); updateVideo(); rebuildTable();
+}
+function rebuildTable(){
+  const tbody=document.getElementById('tbody');
+  tbody.innerHTML='';
+  [...RAW].sort((a,b)=>a.d-b.d||a.t-b.t).forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.d}</td><td>${r.t}</td>
+      <td>${r.y>=DMAX?'>'+DMAX:r.y.toFixed(0)}</td>
+      <td class="${r.f?'fo':'fx'}">${r.f?'O':'X'}</td>
+      <td>${r.del||'—'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ══════════════════════════════════════════
+//  Z-SLIDER UPDATE (efficient restyle)
+// ══════════════════════════════════════════
+function updateZ(v){
+  zVal=v;
+  document.getElementById('zvd').innerHTML=v+'<br><span class="z-unit">mm</span>';
+  // Update Z-plane
+  Plotly.restyle('plot',{z:[[[v,v],[v,v]]]}, [TI.zpl]);
+  // Update intersection
+  const isec=computeIntersection(v);
+  Plotly.restyle('plot',{
+    x:[isec.x],y:[isec.y],z:[isec.z],
+    visible:[LAYERS.zpl&&isec.x.length>0]
+  },[TI.isec]);
+}
+document.getElementById('zslider').addEventListener('input',e=>updateZ(+e.target.value));
+
+// ══════════════════════════════════════════
+//  LAYER TOGGLES
+// ══════════════════════════════════════════
+function togL(key){
+  LAYERS[key]=!LAYERS[key];
+  document.getElementById('bl-'+key).classList.toggle('on',LAYERS[key]);
+  const m={safe:[TI.safe],frac:[TI.frac],bnd:[TI.bnd],
+            data:[TI.fdat,TI.sdat],zpl:[TI.zpl,TI.isec]};
+  (m[key]||[]).forEach(i=>Plotly.restyle('plot',{visible:[LAYERS[key]]},[i]));
+}
+
+function setCM(i){
+  cmIdx=i;
+  document.querySelectorAll('[id^="cm"]').forEach(b=>b.classList.remove('on'));
+  document.getElementById('cm'+i).classList.add('on');
+  Plotly.react('plot',buildTraces(),layout,config);
+}
+
+// ══════════════════════════════════════════
+//  CALCULATOR
+// ══════════════════════════════════════════
+function calc(){
+  const d=+document.getElementById('sd').value;
+  const t=+document.getElementById('st').value;
+  document.getElementById('vd').textContent=d.toFixed(2)+' m';
+  document.getElementById('vt').textContent=t.toFixed(1)+' mm';
+  const y=rsm(d,t), dc=dCrit(t), fr=isFrac(d,t), marg=d-dc;
+  document.getElementById('iy').textContent=fr?'파단 구간 ('+Math.round(Math.min(y,DMAX))+'mm)'
+                                                 :Math.round(y)+' mm';
+  document.getElementById('iy').className='iv '+(fr?'cd':'ca');
+  document.getElementById('ifrac').textContent=fr?'⚠ 파단 발생':'✓ 안전';
+  document.getElementById('ifrac').className='iv '+(fr?'cd':'cs');
+  document.getElementById('imarg').textContent=(marg>=0?'+':'')+marg.toFixed(2)+' m';
+  document.getElementById('imarg').className='iv '+(marg>=0?'cs':'cd');
+  document.getElementById('idc').textContent=dc.toFixed(2)+' m';
+}
+document.getElementById('sd').addEventListener('input',calc);
+document.getElementById('st').addEventListener('input',calc);
+calc();
+
+// ══════════════════════════════════════════
+//  FEM 동영상 자동 재생
+//  파일명 규칙: videos/realXdotY_T.mp4
+//    X.Y = 거리 (소수점을 'dot'으로)
+//    T   = 두께(mm 정수)
+//  예: real1dot5_8.mp4, real2dot0_10.mp4, real5dot0_16.mp4
+// ══════════════════════════════════════════
+function formatD(d){
+  // 1.5 → "1dot5", 2 → "2dot0", 5 → "5dot0"
+  if(Number.isInteger(d)) return `${d}dot0`;
+  return d.toString().replace('.', 'dot');
+}
+
+function videoSrcFor(d, t) {
+  return `videos/${MC.videoPrefix}${formatD(d)}_${t}.mp4`;
+}
+
+// 가장 가까운 해석점 찾기 (정규화 거리)
+function findNearestCase(d, t) {
+  let best = RAW[0], bestDist = Infinity;
+  // 정규화: d 범위 ~3.5m, t 범위 ~8mm
+  const D_RANGE = 3.5, T_RANGE = 8;
+  RAW.forEach(r => {
+    const dn = (d - r.d) / D_RANGE;
+    const tn = (t - r.t) / T_RANGE;
+    const dist = Math.sqrt(dn*dn + tn*tn);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = r;
+    }
+  });
+  // 실제 거리 (m, mm)로도 반환
+  const realDist = Math.sqrt((d-best.d)**2 + ((t-best.t)/4)**2);
+  return { case: best, normDist: bestDist, realDist };
+}
+
+const videoEl = document.getElementById('fem-video');
+const overlayEl = document.getElementById('vid-overlay');
+let currentVideoSrc = '';
+let videoTimer = null;
+
+function showOverlay(msg, isError=false) {
+  overlayEl.textContent = msg;
+  overlayEl.classList.toggle('error', isError);
+  overlayEl.classList.add('show');
+}
+function hideOverlay() {
+  overlayEl.classList.remove('show');
+}
+
+videoEl.addEventListener('error', () => {
+  showOverlay(`동영상을 불러올 수 없습니다\n파일명: ${currentVideoSrc.split('/').pop()}`, true);
+});
+videoEl.addEventListener('loadeddata', hideOverlay);
+videoEl.addEventListener('canplay', () => {
+  videoEl.play().catch(()=>{}); // autoplay 보장
+});
+
+function updateVideo() {
+  const d = +document.getElementById('sd').value;
+  const t = +document.getElementById('st').value;
+  const { case: nc, realDist } = findNearestCase(d, t);
+  const src = videoSrcFor(nc.d, nc.t);
+
+  // 표시 업데이트
+  document.getElementById('vid-from').textContent = `현재: d=${d.toFixed(2)}m, t=${t.toFixed(1)}mm`;
+  document.getElementById('vid-case').textContent = `→ d=${nc.d}m / t=${nc.t}mm`;
+  const sp = document.getElementById('vid-status');
+  sp.textContent = nc.f ? '파단' : '안전';
+  sp.className = 'video-status-pill ' + (nc.f ? 'frac' : 'safe');
+
+  // 거리 표시
+  const exact = (Math.abs(d - nc.d) < 0.01 && Math.abs(t - nc.t) < 0.01);
+  document.getElementById('vid-dist').textContent = exact
+    ? '정확 일치'
+    : `Δd=${Math.abs(d-nc.d).toFixed(2)}m Δt=${Math.abs(t-nc.t).toFixed(1)}mm`;
+
+  // 동영상 src가 바뀐 경우만 로드
+  if (src !== currentVideoSrc) {
+    currentVideoSrc = src;
+    showOverlay('동영상 로딩 중…');
+    videoEl.src = src;
+    videoEl.load();
+  }
+}
+
+// 슬라이더 정지 후 250ms 뒤 동영상 갱신 (디바운스)
+function scheduleVideoUpdate() {
+  if (videoTimer) clearTimeout(videoTimer);
+  videoTimer = setTimeout(updateVideo, 250);
+}
+document.getElementById('sd').addEventListener('input', scheduleVideoUpdate);
+document.getElementById('st').addEventListener('input', scheduleVideoUpdate);
+
+// 초기 로드
+updateVideo();
+
+// ══════════════════════════════════════════
+//  TABLE — 초기 빌드
+// ══════════════════════════════════════════
+rebuildTable();
+</script>
+</body>
+</html>

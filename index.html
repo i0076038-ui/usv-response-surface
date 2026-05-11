@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AH36 반응표면 v3</title>
+<title>USV 반응표면 — AH36 / Al 5083</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -122,6 +122,14 @@ td:first-child{text-align:left;color:var(--muted)}
 .fml .hl{color:var(--accent)}.fml .wl{color:var(--warn)}
 .r2b{display:inline-block;margin-top:4px;padding:2px 7px;border-radius:3px;
      background:rgba(0,224,154,.1);border:1px solid rgba(0,224,154,.3);color:var(--safe);font-size:9px}
+/* ─ Material tab bar ─ */
+.tab-bar{display:flex;gap:8px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.mat-btn{flex:1;max-width:220px;padding:9px 14px;font-size:12px;font-family:var(--mono);font-weight:700;
+         border-radius:6px;border:1px solid var(--border);background:transparent;
+         color:var(--muted);cursor:pointer;transition:all .2s;letter-spacing:1px}
+.mat-btn.on-ah{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.1)}
+.mat-btn.on-al{border-color:var(--warn);color:var(--warn);background:rgba(255,183,0,.1)}
+.mat-btn:hover:not(.on-ah):not(.on-al){border-color:var(--muted);color:var(--text)}
 
 /* Video panel (in sidebar) */
 .video-panel{padding:12px}
@@ -151,8 +159,12 @@ td:first-child{text-align:left;color:var(--muted)}
 </head>
 <body>
 <div class="app">
+<div class="tab-bar">
+  <button class="mat-btn on-ah" id="btn-ah" onclick="switchMat('AH')">⬡ AH36 강재</button>
+  <button class="mat-btn" id="btn-al" onclick="switchMat('AL')">◈ Al 5083-H116</button>
+</div>
 <header>
-  <h1>USV 자폭 공격 — 외판 손상 반응표면 (AH36) v3</h1>
+  <h1>USV 자폭 공격 — 외판 손상 반응표면 (<span id="mat-title">AH36 강재</span>)</h1>
   <div class="sub">log-RSM 반응표면 (비파단 R²=0.997) · 파단구간 회색처리 · 축 원점 통일 · 최대변형량 단면 슬라이서</div>
 </header>
 
@@ -258,7 +270,9 @@ td:first-child{text-align:left;color:var(--muted)}
 // ══════════════════════════════════════════
 //  DATA
 // ══════════════════════════════════════════
-const RAW = [
+//  AH36 DATA
+// ══════════════════════════════════════════
+let RAW = [
   {d:1.5,t:8, y:12834.32,f:1,del:260},{d:1.5,t:10,y:9832.99, f:1,del:201},
   {d:1.5,t:12,y:7025.57, f:1,del:139},{d:1.5,t:14,y:5306.94, f:1,del:106},
   {d:1.5,t:16,y:4142.12, f:1,del:76},
@@ -285,12 +299,12 @@ const RAW = [
 // ══════════════════════════════════════════
 //  RSM (log-polynomial, 비파단 학습, R²=0.997)
 // ══════════════════════════════════════════
-const B = [8.481556,-0.021742,-0.197364,-0.003881,0.003370,-0.003045];
+let B = [8.481556,-0.021742,-0.197364,-0.003881,0.003370,-0.003045];
 function rsm(d,t){ return Math.exp(B[0]+B[1]*d+B[2]*t+B[3]*d*d+B[4]*t*t+B[5]*d*t); }
 
-// ── 쌍선형 보간 (계산기용 — 실제 데이터 기반) ──────────────
-const DG=[1.5,2.0,2.5,3.0,3.5,4.0,5.0],TG=[8,10,12,14,16];
-const YG=[
+// ── 쌍선형 보간 (계산기용) ──────────────
+let DG=[1.5,2.0,2.5,3.0,3.5,4.0,5.0],TG=[8,10,12,14,16];
+let YG=[
   [12834.32,6204.06,4009.49,1007.35,1006.43,976.51,874.59],
   [9832.99, 4671.40, 858.07, 762.62, 752.08,728.76,651.25],
   [7025.57, 3149.75, 602.89, 580.15, 575.28,556.73,496.73],
@@ -313,16 +327,25 @@ function bilinear(d,t){
 // ══════════════════════════════════════════
 //  FRACTURE BOUNDARY
 // ══════════════════════════════════════════
-const BC = [{t:8,dc:3.25},{t:10,dc:2.75},{t:12,dc:2.75},{t:14,dc:2.25},{t:16,dc:2.25}];
+let BC = [{t:8,dc:3.25},{t:10,dc:2.75},{t:12,dc:2.75},{t:14,dc:2.25},{t:16,dc:2.25}];
 function dCrit(t) {
-  const tc = Math.max(8, Math.min(16, t));
-  if(tc<=8) return 3.25;
-  if(tc>=16) return 2.25;
-  for(let i=0;i<BC.length-1;i++){
-    if(BC[i].t<=tc&&tc<=BC[i+1].t)
-      return BC[i].dc+(BC[i+1].dc-BC[i].dc)*(tc-BC[i].t)/(BC[i+1].t-BC[i].t);
+  if(!BC||!BC.length) return 999;
+  const tMin=BC[0].t, tMax=BC[BC.length-1].t;
+  if(t<=tMin){
+    // 외삽 (아래 방향)
+    if(BC.length>=2){ const s=(BC[1].dc-BC[0].dc)/(BC[1].t-BC[0].t); return BC[0].dc+s*(t-BC[0].t); }
+    return BC[0].dc;
   }
-  return 2.75;
+  if(t>=tMax){
+    // 외삽 (위 방향)
+    if(BC.length>=2){ const n=BC.length-1,s=(BC[n].dc-BC[n-1].dc)/(BC[n].t-BC[n-1].t); return BC[n].dc+s*(t-BC[n].t); }
+    return BC[BC.length-1].dc;
+  }
+  for(let i=0;i<BC.length-1;i++){
+    if(BC[i].t<=t&&t<=BC[i+1].t)
+      return BC[i].dc+(BC[i+1].dc-BC[i].dc)*(t-BC[i].t)/(BC[i+1].t-BC[i].t);
+  }
+  return BC[0].dc;
 }
 function isFrac(d,t){ return d < dCrit(t); }
 
@@ -354,44 +377,83 @@ function computeIntersection(zv) {
 }
 
 // ══════════════════════════════════════════
-//  GRID GENERATION
+//  AL 5083-H116 DATA
+// ══════════════════════════════════════════
+const AL_RAW = [
+  {d:2.5,t:8, y:22108.64,f:1},{d:2.5,t:10,y:15243.41,f:1},{d:2.5,t:12,y:12186.48,f:1},
+  {d:2.5,t:14,y:10629.14,f:1},{d:2.5,t:16,y: 7754.90,f:1},{d:2.5,t:18,y: 5724.39,f:1},
+  {d:3.5,t:8, y:11258.11,f:1},{d:3.5,t:10,y: 7463.68,f:1},{d:3.5,t:12,y: 5221.51,f:1},
+  {d:3.5,t:14,y: 4626.54,f:1},{d:3.5,t:16,y: 3125.95,f:1},{d:3.5,t:18,y: 1267.30,f:1},
+  {d:4.5,t:8, y: 5592.34,f:1},{d:4.5,t:10,y: 3856.91,f:1},{d:4.5,t:12,y: 1700.47,f:1},
+  {d:4.5,t:14,y: 1373.07,f:1},{d:4.5,t:16,y: 1116.55,f:1},{d:4.5,t:18,y:  951.33,f:1},
+  {d:5.5,t:8, y: 3562.47,f:1},{d:5.5,t:10,y: 1863.48,f:1},{d:5.5,t:12,y: 1467.73,f:1},
+  {d:5.5,t:14,y: 1171.44,f:1},{d:5.5,t:16,y:  959.72,f:1},{d:5.5,t:18,y:  797.87,f:0},
+  {d:6.5,t:8, y: 2053.71,f:1},{d:6.5,t:10,y: 1561.93,f:1},{d:6.5,t:12,y: 1210.39,f:1},
+  {d:6.5,t:14,y:  987.89,f:0},{d:6.5,t:16,y:  818.08,f:0},{d:6.5,t:18,y:  679.49,f:0},
+  {d:7.5,t:8, y: 1715.59,f:1},{d:7.5,t:10,y: 1288.85,f:1},{d:7.5,t:12,y: 1028.68,f:0},
+  {d:7.5,t:14,y:  841.51,f:0},{d:7.5,t:16,y:  693.42,f:0},{d:7.5,t:18,y:  576.83,f:0},
+];
+const AL_DG=[2.5,3.5,4.5,5.5,6.5,7.5], AL_TG=[8,10,12,14,16,18];
+const AL_YG=[
+  [22108.64,11258.11,5592.34,3562.47,2053.71,1715.59],
+  [15243.41, 7463.68,3856.91,1863.48,1561.93,1288.85],
+  [12186.48, 5221.51,1700.47,1467.73,1210.39,1028.68],
+  [10629.14, 4626.54,1373.07,1171.44, 987.89, 841.51],
+  [ 7754.90, 3125.95,1116.55, 959.72, 818.08, 693.42],
+  [ 5724.39, 1267.30, 951.33, 797.87, 679.49, 576.83],
+];
+const AL_B=[9.275127,-0.110633,-0.117524,-0.002611,0.000951,-0.000992];
+const AL_BC=[{t:12,dc:7.0},{t:14,dc:6.0},{t:16,dc:6.0},{t:18,dc:5.0}];
+
+// ── AH 원본 저장 ──
+const AH_RAW=[...RAW], AH_B=[...B], AH_DG=[...DG], AH_TG=[...TG],
+      AH_YG=YG.map(r=>[...r]), AH_BC=BC.map(o=>({...o}));
+
+// ══════════════════════════════════════════
+//  MATERIAL CONFIGS
+// ══════════════════════════════════════════
+const MAT_CFG = {
+  AH:{ dMin:0.5,dMax:7.0,tMin:6,tMax:24, Y_SMIN:300,Y_SMAX:1100,
+       xRange:[0.5,7],yRange:[6,24],dtickD:1,dtickT:2,
+       slDMin:0.5,slDMax:7,slTMin:6,slTMax:24,dDef:3.0,tDef:12,
+       videoPrefix:'AH', title:'AH36 강재', accentColor:'var(--accent)',
+       RAW:AH_RAW, B:AH_B, DG:AH_DG, TG:AH_TG, YG:AH_YG, BC:AH_BC },
+  AL:{ dMin:0.5,dMax:8.0,tMin:6,tMax:20, Y_SMIN:550,Y_SMAX:1100,
+       xRange:[0.5,8],yRange:[6,20],dtickD:1,dtickT:2,
+       slDMin:0.5,slDMax:8,slTMin:6,slTMax:20,dDef:6.0,tDef:14,
+       videoPrefix:'AL', title:'Al 5083-H116', accentColor:'var(--warn)',
+       RAW:AL_RAW, B:AL_B, DG:AL_DG, TG:AL_TG, YG:AL_YG, BC:AL_BC },
+};
+let CURMAT='AH', MC=MAT_CFG.AH;
+
+// ══════════════════════════════════════════
+//  GRID GENERATION (재료 전환 시 재생성)
 // ══════════════════════════════════════════
 const ND=100,NT=80;
-const DMAX=1400; // display cap for Z
-const dArr=[],tArr=[];
-for(let i=0;i<=ND;i++) dArr.push(0.5+6.5*i/ND);  // 0.5→7.0
-for(let j=0;j<=NT;j++) tArr.push(6+18*j/NT);       // 6→24
+const DMAX=1400;
+let dArr=[],tArr=[],zSafe=[],zFrac=[],bndT=[],bndD=[],bndZ=[];
+let Y_SMIN=300,Y_SMAX=1100;
 
-// Safe Y normalization
-const Y_SMIN=300, Y_SMAX=1100;
-
-// Build surface matrices
-const zSafe=[],zFrac=[],scSafe=[],scFrac=[];
-for(let j=0;j<=NT;j++){
-  const rs=[],rf=[],ss=[],sf=[];
-  for(let i=0;i<=ND;i++){
-    const d=dArr[i],t=tArr[j];
-    const y=Math.min(rsm(d,t),DMAX);
-    const fr=isFrac(d,t);
-    rs.push(fr?null:y);
-    rf.push(fr?y:null);
-    // surfacecolor: safe=[0..1], fracture=−1
-    ss.push(fr?null:Math.max(0,Math.min(1,(y-Y_SMIN)/(Y_SMAX-Y_SMIN))));
-    sf.push(fr?-1:null);
+function buildSurfaceData(){
+  dArr=[];tArr=[];zSafe=[];zFrac=[];bndT=[];bndD=[];bndZ=[];
+  Y_SMIN=MC.Y_SMIN; Y_SMAX=MC.Y_SMAX;
+  for(let i=0;i<=ND;i++) dArr.push(MC.dMin+(MC.dMax-MC.dMin)*i/ND);
+  for(let j=0;j<=NT;j++) tArr.push(MC.tMin+(MC.tMax-MC.tMin)*j/NT);
+  for(let j=0;j<=NT;j++){
+    const rs=[],rf=[];
+    for(let i=0;i<=ND;i++){
+      const d=dArr[i],t=tArr[j],y=Math.min(rsm(d,t),DMAX),fr=isFrac(d,t);
+      rs.push(fr?null:y); rf.push(fr?y:null);
+    }
+    zSafe.push(rs);zFrac.push(rf);
   }
-  zSafe.push(rs);zFrac.push(rf);scSafe.push(ss);scFrac.push(sf);
-}
-
-// Fracture boundary line ON SURFACE
-const bT=[],bD=[],bZ=[];
-for(let j=0;j<=NT*4;j++){
-  const t=6+18*j/(NT*4);
-  const dc=dCrit(t);
-  if(dc>=0.5&&dc<=7.0){
-    bT.push(t);bD.push(dc);
-    bZ.push(Math.min(rsm(dc,t),DMAX));
+  for(let j=0;j<=NT*4;j++){
+    const t=MC.tMin+(MC.tMax-MC.tMin)*j/(NT*4);
+    const dc=dCrit(t);
+    if(dc>=MC.dMin&&dc<=MC.dMax){ bndT.push(t);bndD.push(dc);bndZ.push(Math.min(rsm(dc,t),DMAX)); }
   }
 }
+buildSurfaceData();
 
 // ══════════════════════════════════════════
 //  STATE
@@ -443,7 +505,7 @@ function buildTraces(){
     // 2: Fracture boundary line (on surface, orange)
     {
       type:'scatter3d',name:'파단 경계',
-      x:bD,y:bT,z:bZ,
+      x:bndD,y:bndT,z:bndZ,
       mode:'lines',
       line:{color:'#ffb700',width:7},
       visible:LAYERS.bnd,
@@ -485,7 +547,7 @@ function buildTraces(){
     // 6: Z-plane
     {
       type:'surface',name:'Z 단면',
-      x:[0.5,7],y:[6,24],
+      x:[MC.xRange[0],MC.xRange[1]],y:[MC.yRange[0],MC.yRange[1]],
       z:[[zVal,zVal],[zVal,zVal]],
       colorscale:[[0,'rgba(0,212,255,0.10)'],[1,'rgba(0,212,255,0.10)']],
       showscale:false,opacity:1,
@@ -544,6 +606,45 @@ const layout={
 const config={responsive:true,displayModeBar:true,displaylogo:false};
 
 Plotly.newPlot('plot',buildTraces(),layout,config);
+
+// ══════════════════════════════════════════
+//  MATERIAL SWITCH
+// ══════════════════════════════════════════
+function switchMat(key){
+  CURMAT=key; MC=MAT_CFG[key];
+  RAW=MC.RAW;
+  B.length=0; MC.B.forEach((v,i)=>{B[i]=v;});
+  DG.length=0; MC.DG.forEach(v=>DG.push(v));
+  TG.length=0; MC.TG.forEach(v=>TG.push(v));
+  YG.length=0; MC.YG.forEach(r=>YG.push([...r]));
+  BC.length=0; MC.BC.forEach(o=>BC.push({...o}));
+  buildSurfaceData();
+  layout.scene.xaxis.range=MC.xRange;
+  layout.scene.yaxis.range=MC.yRange;
+  const sd=document.getElementById('sd'),st=document.getElementById('st');
+  sd.min=MC.slDMin; sd.max=MC.slDMax; sd.value=MC.dDef;
+  st.min=MC.slTMin; st.max=MC.slTMax; st.value=MC.tDef;
+  const zv=key==='AH'?600:800;
+  document.getElementById('zslider').value=zv; zVal=zv;
+  document.getElementById('zvd').innerHTML=zv+'<br><span class="z-unit">mm</span>';
+  document.getElementById('btn-ah').className='mat-btn'+(key==='AH'?' on-ah':'');
+  document.getElementById('btn-al').className='mat-btn'+(key==='AL'?' on-al':'');
+  document.getElementById('mat-title').textContent=MC.title;
+  Plotly.react('plot',buildTraces(),layout,config);
+  calc(); updateVideo(); rebuildTable();
+}
+function rebuildTable(){
+  const tbody=document.getElementById('tbody');
+  tbody.innerHTML='';
+  [...RAW].sort((a,b)=>a.d-b.d||a.t-b.t).forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.d}</td><td>${r.t}</td>
+      <td>${r.y>=DMAX?'>'+DMAX:r.y.toFixed(0)}</td>
+      <td class="${r.f?'fo':'fx'}">${r.f?'O':'X'}</td>
+      <td>${r.del||'—'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
 
 // ══════════════════════════════════════════
 //  Z-SLIDER UPDATE (efficient restyle)
@@ -616,7 +717,7 @@ function formatD(d){
 }
 
 function videoSrcFor(d, t) {
-  return `videos/AH${formatD(d)}_${t}.mp4`;
+  return `videos/${MC.videoPrefix}${formatD(d)}_${t}.mp4`;
 }
 
 // 가장 가까운 해석점 찾기 (정규화 거리)
@@ -700,17 +801,9 @@ document.getElementById('st').addEventListener('input', scheduleVideoUpdate);
 updateVideo();
 
 // ══════════════════════════════════════════
-//  TABLE
+//  TABLE — 초기 빌드
 // ══════════════════════════════════════════
-const tbody=document.getElementById('tbody');
-[...RAW].sort((a,b)=>a.d-b.d||a.t-b.t).forEach(r=>{
-  const tr=document.createElement('tr');
-  tr.innerHTML=`<td>${r.d}</td><td>${r.t}</td>
-    <td>${r.y>=DMAX?'>'+DMAX:r.y.toFixed(0)}</td>
-    <td class="${r.f?'fo':'fx'}">${r.f?'O':'X'}</td>
-    <td>${r.del||'—'}</td>`;
-  tbody.appendChild(tr);
-});
+rebuildTable();
 </script>
 </body>
 </html>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>USV 반응표면 — AH36 / Al 5083</title>
+<title>USV 반응표면 — AH36 / Al 5052</title>
 
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-MN13BRJE9Z"></script>
@@ -325,7 +325,7 @@ td:first-child{text-align:left;color:var(--muted)}
 <div class="app">
 <div class="tab-bar">
   <button class="mat-btn on-ah" id="btn-ah" onclick="switchMat('AH')">⬡ AH36 강재</button>
-  <button class="mat-btn" id="btn-al" onclick="switchMat('AL')">◈ Al 5083-H116</button>
+  <button class="mat-btn" id="btn-al" onclick="switchMat('AL')">◈ Al 5052-H32</button>
 </div>
 <header>
   <h1>USV 자폭 공격 — 외판 손상 반응표면 (<span id="mat-title">AH36 강재</span>)</h1>
@@ -545,7 +545,7 @@ function computeIntersection(zv) {
 }
 
 // ══════════════════════════════════════════
-//  AL 5083-H116 DATA
+//  AL 5052-H32 DATA
 // ══════════════════════════════════════════
 const AL_RAW = [
   {d:2.5,t:8, y:22108.64,f:1},{d:2.5,t:10,y:15243.41,f:1},{d:2.5,t:12,y:12186.48,f:1},
@@ -589,7 +589,7 @@ const MAT_CFG = {
   AL:{ dMin:0.5,dMax:8.0,tMin:6,tMax:20, Y_SMIN:550,Y_SMAX:1100,
        xRange:[0.5,8],yRange:[6,20],dtickD:1,dtickT:2,
        slDMin:0.5,slDMax:8,slTMin:6,slTMax:20,dDef:6.0,tDef:14,
-       videoPrefix:'AL', title:'Al 5083-H116', accentColor:'var(--warn)',
+       videoPrefix:'AL', title:'Al 5052-H32', accentColor:'var(--warn)',
        RAW:AL_RAW, B:AL_B, DG:AL_DG, TG:AL_TG, YG:AL_YG, BC:AL_BC },
 };
 let CURMAT='AH', MC=MAT_CFG.AH;
